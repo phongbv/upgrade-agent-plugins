@@ -105,11 +105,27 @@ Tier 1: [Domain] [Utilities] [Contracts]
    - Never merge with TFM upgrade — always a separate task
    - **Exclude** side-by-side web projects — they stay old-style throughout migration
 
+2a. **TFM upgrade for the whole solution, when originating from .NET Framework** — a **separate,
+    solution-wide task**, immediately after task 2 and **before any per-tier task in step 3**. See
+    [../planning-rules/framework-migration.md](../planning-rules/framework-migration.md) "TFM
+    upgrade (all project types)" — this is not optional or foldable into step 3 here: a project
+    still on classic `.NETFramework` cannot reference a project already retargeted to a modern TFM
+    (`net8.0`/`net10.0`) at all, so if TFM changes happen per-tier, the solution is unbuildable at
+    every intermediate tier boundary and step 3's "between-tier validation: confirm higher tiers
+    still build" is impossible to satisfy — there is no such thing as "higher tiers still build on
+    old framework" once any lower tier has moved to the new TFM. Retarget every remaining project
+    together here; step 3 then covers packages + code fixes only, never TFM changes, for this
+    scenario.
+
 3. **Upgrade per tier** (one task per tier)
-   - Upgrade all projects in the tier (TFM, packages, code fixes)
+   - Upgrade all projects in the tier — **packages and code fixes**; TFM changes only if task 2a
+     does not apply (i.e. the solution was already fully on a modern TFM and no project ever
+     targeted classic .NET Framework)
    - Tier ordering: leaf nodes first, then projects depending on them
    - Each tier task includes build validation + test execution
-   - Between-tier validation: confirm higher tiers still build on old framework
+   - Between-tier validation: confirm higher tiers still build (on the framework/TFM they were on
+     before this tier's task started — for a .NET-Framework-origin solution that is already the
+     post-2a modern TFM for everyone, not "old framework")
 
    *(If side-by-side web migration: scaffold + migrate tasks insert here.)*
 
@@ -154,11 +170,21 @@ Cannot start Tier N+1 until Tier N is validated. This is the core safety propert
 After completing each tier:
 - All projects in tier build successfully
 - All tier tests pass
-- Higher tiers still build and pass their tests (on old framework)
+- Higher tiers still build and pass their tests, on whatever framework/TFM they were on before
+  this tier's task started — for a .NET-Framework-origin solution, that means the modern TFM
+  everyone already shares after task 2a, not "old framework" (see Plan Structure item 2a: a tier
+  task must never be the one changing TFM in that scenario)
 
 ---
 
 ## 5. Anti-patterns
+
+**Don't fold TFM retargeting into per-tier tasks for a .NET-Framework-origin solution** — a
+project still on classic `.NETFramework` cannot reference a project already retargeted to
+`net8.0`/`net10.0` at all, so "upgrade this tier's TFM, packages, and code fixes" as one per-tier
+task leaves the solution unbuildable at every tier boundary until the last tier finishes, with no
+between-tier validation actually possible. TFM retargeting for a Framework-origin solution is
+always task 2a (see Plan Structure) — solution-wide, before any per-tier task — never inside one.
 
 **Don't create per-project plan tasks within a tier** — a tier is the planning unit. During execution, per-project subtasks are fine if complexity warrants it.
 

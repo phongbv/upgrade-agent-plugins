@@ -3,7 +3,7 @@
 Scenario-specific execution guidance for .NET version upgrade tasks.
 Supplements the executor's core task-execution steps — does not replace them.
 
-> **This file covers 7 sections.**
+> **This file covers 8 sections.**
 >
 > | # | Section | Key Content |
 > |---|---------|-------------|
@@ -14,6 +14,7 @@ Supplements the executor's core task-execution steps — does not replace them.
 > | 4 | Multi-Targeting Mechanics | MSBuild conditions for package references and API calls |
 > | 5 | Tasks Breakdown Hints | Per-flavor decomposition hints for complex tasks |
 > | 6 | Test Baseline Tasks | (Optional) Driving pre/post-upgrade test safety-net via dotnet-test |
+> | 7 | Cross-Project Service Registration Follow-ups | Library → consuming-app DI/route/pipeline wiring notes that must survive across tasks |
 
 ---
 
@@ -363,3 +364,85 @@ The planning stage injects two safety-net tasks:
   4. If failures remain unresolved, follow the normal task-execution failure and escalation handling.
 
 Do not rewrite behavior-locking tests merely to make the suite pass.
+
+---
+
+## Section 7: Cross-Project Service Registration Follow-ups
+
+### Why this exists
+
+A library task often changes how its services, routes, or middleware are wired into the host —
+replacing an Autofac module, removing reflection/attribute-based auto-registration, introducing a
+new `IServiceCollection` extension method (e.g. `AddXyzServices()`), or converting an
+auto-discovered module (e.g. CMS `IInitializableModule`, an auto-loaded `IHttpModule`) into a
+plain method that now needs an explicit call inside `app.UseEndpoints`/the middleware pipeline.
+The call site that must invoke it lives in a **different project's task**: the consuming
+application's composition root (`Program.cs`, `Startup.cs`). That task may run later, earlier
+(already completed), or never in this repo. A note left only in chat is lost once the library
+task's context ends. This section defines the durable, cross-task handoff — the same
+created-lazily/persists-across-tasks convention `breakdown-context.md` uses for decomposition.
+
+This applies whether the wiring call is a DI registration or not — e.g. a `<task_related_skills>`
+skill covering route/endpoint migration (Web API → `IEndpointRouteBuilder`, module auto-discovery
+→ explicit `Startup.Configure` call) triggers this section exactly like a DI-registration skill
+does; do not treat this ledger as DI-only when deciding whether it applies.
+
+**Skip this section** when the library and its only consuming app are both inside the same
+task's scope — wire the registration call inline; the ledger below is only needed when they are
+handled by different tasks.
+
+### Trigger (library-side task)
+
+The task modifies a project that is **not** a composition root (no `Program.cs`/`Startup.cs` in
+scope) and, as part of the upgrade:
+- introduces or changes a public `IServiceCollection` extension method a host must call, or
+- removes a form of auto-registration the modern setup no longer performs automatically
+  (Autofac module scanning, attribute-driven registration conventions, MEF, ASP.NET
+  auto-discovered `IHttpModule`/`IControllerFactory`, CMS `IInitializableModule`, etc.) — the
+  host must now call it explicitly, or
+- converts a route/endpoint registration (Web API `GlobalConfiguration.Configure`, conventional
+  routing, etc.) into a method that must be invoked from `app.UseEndpoints`/the middleware
+  pipeline instead of being auto-discovered.
+
+### What to do (library-side task)
+
+1. Append an entry to `{workflow_folder}/pending-registrations.md` (create the file if absent)
+   using the format below.
+2. Record the same note in `progress-details.md` under a `## Registration Follow-ups` heading —
+   the ledger and the task history must agree; never rely on the ledger alone.
+3. Do **not** guess which application project should call it, and do **not** edit a project
+   outside your task's scope to add the call — the consumer may not have an upgrade task yet,
+   may live in a different solution, or may be resolved by a task that hasn't run.
+
+#### `pending-registrations.md` format
+
+```markdown
+## Pending Registrations
+
+### registration: {ServiceOrExtensionName}
+- **Status**: open | resolved
+- **Library project**: {path}
+- **Registration call**: {the exact call the host must add, e.g. `services.AddXyzServices()` or
+  `WebApiInitialization.RegisterRoutes(endpoints)` inside `app.UseEndpoints`}
+- **Reason**: {what auto-registration was removed / why the host must now call this}
+- **Detected**: task {taskId}
+- **Resolved by**: task {taskId}   <!-- added when resolved -->
+```
+
+### What to do (app/host-side task)
+
+Any task whose scope is an application or host project (has a composition root) MUST, during its
+Research step:
+1. Read `{workflow_folder}/pending-registrations.md` if it exists.
+2. For every `open` entry whose **Library project** is referenced (directly or transitively) by
+   this app, add the registration call at the composition root and flip the entry to `resolved`
+   (fill **Resolved by**).
+3. If no open entry references this app, note that in `progress-details.md` and continue — this
+   is not a failure.
+
+### If no consuming app exists in this solution/repo
+
+Some libraries are consumed by a downstream repo outside the upgrade's scope. Leave the entry
+`open` — never delete an unresolved entry. At scenario completion, any entry still `open` MUST be
+surfaced to the user as an explicit manual follow-up (see `SKILL.md` Success Criteria); it must
+never be left only in the ledger file for the user to discover on their own.

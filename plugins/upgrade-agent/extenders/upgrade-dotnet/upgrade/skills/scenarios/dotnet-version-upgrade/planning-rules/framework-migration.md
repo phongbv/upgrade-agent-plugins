@@ -38,7 +38,12 @@ across Framework and modern .NET is too fragile for libraries).
 
 ## TFM upgrade (all project types)
 
-- Generate as a **separate** task AFTER SDK-style conversion
+- Generate as a **separate** task AFTER SDK-style conversion **and BEFORE any per-tier/bottom-up
+  code-level task** — never fold it into a per-tier task alongside packages/code fixes. A project
+  still on classic `.NETFramework` cannot reference a project already retargeted to a modern TFM,
+  so if TFM changes happen inside a per-tier task, the solution is unbuildable at every tier
+  boundary until the whole graph finishes, which defeats bottom-up's between-tier validation
+  entirely. See [../strategies/bottom-up.md](../strategies/bottom-up.md) Plan Structure item 2a.
 - This task covers ALL projects that need TFM changes — not just libraries:
   - **Libraries** that serve both old and new consumers → add multi-targeting
   - **Libraries** with no old consumers remaining → in-place TFM change

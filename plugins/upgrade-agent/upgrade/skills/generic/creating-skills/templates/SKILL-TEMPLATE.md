@@ -49,6 +49,22 @@ Task Progress:
 [If content grows beyond ~100 lines for a section, move to a reference file:]
 **[Advanced topic]**: See `references/topic.md` for details
 
+## Cross-Project / Cross-Task Handoff
+
+[Include only if this skill's change can require a follow-up in a different file, project, or
+task that is out of this skill's own scope — e.g. a library change that needs a call added at a
+consuming application's composition root, entry point, or config, which may be handled by an
+earlier, later, or already-completed task.]
+
+- If the follow-up location is inside the current task's scope, wire it in directly and verify
+  it (e.g. grep to confirm the call site actually exists, not just declared).
+- If it is out of scope, do not guess at editing another project/task. Record a durable note
+  instead so it survives after this task's context ends:
+  - If the host's upgrade workflow tracks a shared ledger (e.g. `pending-registrations.md`),
+    append an entry there with the exact call and the project that must add it.
+  - Otherwise, note it explicitly in the task's progress record (e.g. `progress-details.md`)
+    under a clearly-labeled follow-up heading.
+
 ## Common Patterns
 
 [Include 1-3 input/output examples if output quality depends on seeing the style.]

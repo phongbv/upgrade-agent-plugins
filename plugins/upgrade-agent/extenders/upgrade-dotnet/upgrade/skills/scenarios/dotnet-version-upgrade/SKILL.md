@@ -104,13 +104,17 @@ Confirms upgrade options (including strategy) and creates the plan:
 - Strategy and execution constraints persisted in scenario-instructions.md
 
 ### Stage 3: Execution
-**When entering this stage, load**: [execution.md](execution.md) *(read completely - contains 7 sections)*
+**When entering this stage, load**: [execution.md](execution.md) *(read completely - contains 8 sections)*
 
 Executes the upgrade tasks using the executor's core task-execution steps:
 - Reads execution constraints from scenario-instructions.md (distilled during planning)
 - Follows plan.md task order (which encodes the strategy structure)
 - Decomposition rules in execution.md supplement the core execution steps
   (stub resolution subtasks, package replacement research, multi-targeting mechanics)
+- Library → consuming-app wiring notes (DI registration, route/endpoint registration, middleware
+  pipeline calls) are tracked in `pending-registrations.md` so they survive across tasks — applies
+  to any `<task_related_skills>` skill that converts an auto-discovered module into an explicit
+  call, not just DI-specific ones (see execution.md Section 7)
 
 ## Success Criteria
 
@@ -119,6 +123,9 @@ Executes the upgrade tasks using the executor's core task-execution steps:
 - [ ] Solution builds without errors
 - [ ] All tests pass
 - [ ] No dependency conflicts
+- [ ] No unresolved entries in `pending-registrations.md` — every library service-registration
+      follow-up is either `resolved` or, when no consuming app exists in this repo, explicitly
+      surfaced to the user as a manual follow-up
 
 ## Error Handling
 
