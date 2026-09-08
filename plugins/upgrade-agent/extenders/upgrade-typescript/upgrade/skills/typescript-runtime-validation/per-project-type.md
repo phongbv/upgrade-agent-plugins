@@ -2,13 +2,18 @@
 
 Each section gives confirmation signals, what to validate, and a starter template. Templates use `npm`/`npx` — substitute `pnpm`/`yarn`/`bun` if the project's lockfile indicates it.
 
-Every template starts with the same `setup[]`:
+Every npm template starts with a lockfile-preserving `setup[]`:
 
 ```jsonc
-"setup": [ { "command": "npm", "args": ["install"] } ]
+"setup": [ { "command": "npm", "args": ["ci"] } ]
 ```
 
-Replace `npm install` with `pnpm install --frozen-lockfile`, `yarn install --frozen-lockfile`, or `bun install` if appropriate. For workspaces, you may need `--filter <package>` or to run install at the workspace root.
+Use `npm ci` when `package-lock.json` exists; it must not rewrite the lockfile.
+Without an npm lockfile, use `npm install --no-package-lock`. Replace it with
+`pnpm install --frozen-lockfile`, `yarn install --frozen-lockfile`, or
+`bun install --frozen-lockfile` when that package manager's lockfile exists.
+For workspaces, you may need `--filter <package>` or to run install at the
+workspace root. Never use a setup command that modifies a project lockfile.
 
 ---
 
@@ -30,7 +35,7 @@ Replace `npm install` with `pnpm install --frozen-lockfile`, `yarn install --fro
     "args": ["run", "dev"],
     "url": "http://localhost:5173/"
   },
-  "setup": [ { "command": "npm", "args": ["install"] } ],
+  "setup": [ { "command": "npm", "args": ["ci"] } ],
   "assertions": [
     {
       "name": "tsc-no-emit",
@@ -96,7 +101,7 @@ Don't make up routes. Don't ask the LLM to "imagine what endpoints this server p
 ```jsonc
 {
   "projectType": "server",
-  "setup": [ { "command": "npm", "args": ["install"] } ],
+  "setup": [ { "command": "npm", "args": ["ci"] } ],
   "assertions": [
     {
       "name": "tsc-no-emit",
@@ -149,7 +154,7 @@ Don't make up routes. Don't ask the LLM to "imagine what endpoints this server p
 ```jsonc
 {
   "projectType": "cli",
-  "setup": [ { "command": "npm", "args": ["install"] } ],
+  "setup": [ { "command": "npm", "args": ["ci"] } ],
   "assertions": [
     {
       "name": "tsc-no-emit",
@@ -204,7 +209,7 @@ Don't make up routes. Don't ask the LLM to "imagine what endpoints this server p
 ```jsonc
 {
   "projectType": "electron",
-  "setup": [ { "command": "npm", "args": ["install"] } ],
+  "setup": [ { "command": "npm", "args": ["ci"] } ],
   "assertions": [
     {
       "name": "tsc-no-emit",
@@ -255,7 +260,7 @@ Don't make up routes. Don't ask the LLM to "imagine what endpoints this server p
 ```jsonc
 {
   "projectType": "library",
-  "setup": [ { "command": "npm", "args": ["install"] } ],
+  "setup": [ { "command": "npm", "args": ["ci"] } ],
   "assertions": [
     {
       "name": "tsc-no-emit",

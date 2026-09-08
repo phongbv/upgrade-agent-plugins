@@ -1,17 +1,17 @@
-# Runtime Validation
+# Upgrade Workflow Runtime Validation
 
-Validates that the project still runs correctly after the upgrade by replaying a project-specific eval plan via `typescript_validate_runtime`. Covers every project type (webapp, server, CLI, Electron, library, framework, plugin).
+Validate that the project still works across an upgrade by replaying a project-specific eval plan via `typescript_validate_runtime`. The plan can compile or build, run tests, start executable entry points, probe endpoints, and exercise browser flows. This workflow covers every project type (webapp, server, CLI, Electron, library, framework, plugin).
 
 > **Runtime validation is mandatory** on every workflow: call `typescript_validate_runtime` once in Phase 1 (baseline) and once in Phase 3 (post-upgrade) — same plan, two endpoints. The baseline is enforced by the tool layer: `typescript_upgrade_package_dependency_group` does no work until it has run (error `runtime_baseline_missing`), and returns the call to make first.
 
 ## Eval plan basics
 
-A plan looks like this (full schema lives under the `create-eval-plan` skill):
+A plan looks like this (the full schema is in [plan-schema.md](./plan-schema.md)):
 
 ```jsonc
 {
   "projectType": "webapp",
-  "setup":   [ { "command": "npm", "args": ["install"] } ],
+  "setup":   [ { "command": "npm", "args": ["ci"] } ],
   "assertions": [
     { "name": "tsc-builds", "kind": "process",
       "command": "npx", "args": ["tsc", "--noEmit"],
@@ -22,15 +22,17 @@ A plan looks like this (full schema lives under the `create-eval-plan` skill):
 
 Three assertion kinds: `process` (spawn a command, check exit code or stdout), `http-probe` (start a server, GET URLs), `playwright-route` (replay a saved Playwright script).
 
-For plans with `playwright-route` assertions, declare the dev server once at the top level via `devServer` — the runner starts it before assertions and kills it (process tree) after. You do not need to start or stop a dev server yourself.
+For plans with `playwright-route` assertions, declare the dev server once at the top level via `devServer` — the runner starts it before assertions and kills it (process tree) after. You do not need to start or stop a dev server yourself for validation.
+
+This teardown covers only the server the runner itself started. If you started a separate dev server to record the flows (see [recording.md](./recording.md) Step 1), that server is *not* part of the eval plan — you must stop it yourself once recording is done ([recording.md](./recording.md) Step 5). Never leave a recording dev server running into or past validation: it collides with the eval-plan server on the same URL and lingers as an orphan process after the workflow ends.
 
 ## When there is no plan
 
-The tool returns instructions telling you to author one. **Invoke the `create-eval-plan` skill immediately — do not ask the user whether to proceed.** After the skill saves the plan, re-call `typescript_validate_runtime`. Do not hand-write a plan from this skill.
+The tool returns instructions telling you to author one. Follow [plan-authoring.md](./plan-authoring.md) immediately; do not ask the user whether to proceed. After the plan is saved, re-call `typescript_validate_runtime`.
 
 ## Baseline (Phase 1)
 
-Call `typescript_validate_runtime` with `packageDirectory`. The tool:
+Call `typescript_validate_runtime` with `packageDirectory`, `mode: "upgrade"`, and the caller's `sessionId`. The tool:
 1. Loads the plan (or returns guidance to author one).
 2. Runs `setup[]`, then runs each assertion.
 3. Persists the result to `.tsupgrader/runtime-validation/baseline-result.json`.
@@ -45,7 +47,7 @@ Do not pass `resetBaseline` on the first call — it's only for discarding an ex
 
 ## Post-upgrade (Phase 3)
 
-Call `typescript_validate_runtime` with `packageDirectory`. The tool reruns the same plan and compares per-assertion:
+Call `typescript_validate_runtime` with `packageDirectory`, `mode: "upgrade"`, and the caller's `sessionId`. The tool reruns the same plan and compares per-assertion:
 
 - **Regression** (was-pass → now-fail) — surfaced for you to triage and fix.
 - **Pre-existing failure** (was-fail → still-fail) — ignored.
@@ -66,3 +68,5 @@ On regressions:
 4. Iterate up to 3 times. If still failing, revert the upgrade.
 
 The plan is not regenerated between retries — replay determinism is the point.
+
+Return control to the calling upgrade skill after validation passes or the retry loop is exhausted. The calling skill owns upgrade rollback and the final workflow summary.
