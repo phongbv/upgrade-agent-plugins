@@ -3,7 +3,7 @@
 Every eval plan should run the project's unit tests as part of validation. This file covers two cases:
 
 1. **The project already has a usable test script** → emit one assertion that runs it.
-2. **The project has no test script** → generate Vitest tests for the source files affected by the upcoming upgrades, add a `test` script, then emit the assertion.
+2. **The project has no test script** → generate focused Vitest tests for the current validation context, add a `test` script, then emit the assertion.
 
 The assertion uses `verificationMethod: "test-results"`: the pass criterion is **counts-based** — it passes when at least one test ran and none failed, regardless of the process exit code. Exit code `== 0` is used only as a fallback when the output can't be parsed into counts.
 
@@ -24,21 +24,20 @@ If no usable script exists, continue with **Step 2 — Generate**.
 
 ## Step 2 — Generate (only when no test script exists)
 
-Generate targeted regression tests so that breaking changes introduced by upgrades are caught automatically. These tests capture the **current runtime behavior** and must be green against the pre-upgrade code.
+Generate focused tests that capture the **current runtime behavior**. In an upgrade workflow they establish regression coverage before versions change; in a standalone workflow they exercise representative project behavior.
 
-### 2a — Analyze what will change
+### 2a — Select the behavior to cover
 
-Before writing any tests, understand the upgrade risk:
+Before writing tests, use the calling workflow's context:
 
-1. **Identify affected source files** — find `.ts`/`.tsx`/`.js` files (excluding `node_modules`) that import or reference the packages in the upgrade plan.
-2. **For each affected file, read it** and identify:
-   - Which APIs from the upgraded package are being used (function calls, components, hooks, classes, config).
-   - How those APIs affect the application's behavior (rendering, data flow, routing, state, HTTP requests).
-   - Which patterns are most likely to break (renamed exports, changed function signatures, removed defaults, altered return types).
+- **Upgrade workflow:** identify `.ts`/`.tsx`/`.js` files (excluding `node_modules`) that import or reference packages in the upgrade plan. Read each affected file and identify the package APIs in use, how they affect behavior, and which breaking-change patterns are most relevant.
+- **Standalone workflow:** identify the project's primary public or executable behavior from its README, exports, routes, CLI commands, and source entry points. Select a small representative set whose failure would make the project meaningfully unhealthy.
+
+For each selected file, understand how it affects rendering, data flow, routing, state, HTTP requests, command output, or public API behavior.
 
 ### 2b — Design tests that capture runtime behavior
 
-For each affected source file, design tests that would **fail if the upgraded package changes behavior**:
+For each selected source file, design tests that would fail if the behavior being validated stopped working:
 
 | What the code does | What to test |
 |---|---|
@@ -50,19 +49,21 @@ For each affected source file, design tests that would **fail if the upgraded pa
 | Uses a class or factory pattern | Assert instantiation works, methods return expected results |
 | Relies on default exports or named exports | Assert the exports exist and have the expected type/shape |
 
-**Focus on behavior, not implementation.** Test what the user would experience, not internal wiring. A good regression test answers: "If this package upgrade silently changes something, would this test catch it?"
+**Focus on behavior, not implementation.** Test what the user would experience, not internal wiring. In an upgrade workflow ask, "If this package upgrade silently changes something, would this test catch it?" In standalone mode ask, "Would this fail if the project stopped performing this behavior?"
 
 ### 2c — Write the tests
 
 1. **Pick a test runner.** If the project already has Jest / Mocha / Jasmine in `devDependencies`, use it. Otherwise add `"vitest": "latest"` to `devDependencies` and call `typescript_install_dependencies`.
-2. **Generate `.spec.ts` files** alongside each affected source file (or under `__tests__/`):
+2. **Generate `.spec.ts` files** alongside each selected source file (or under `__tests__/`):
    - Use Vitest: `import { describe, it, expect, vi } from 'vitest';`
    - Import the actual module under test — don't rewrite its logic in the test.
-   - Mock only what's necessary (network, filesystem, timers). **Do not mock the package being upgraded** — that's the whole point of the test.
-   - Include a descriptive header comment: `// Regression tests for: <package>@<current-version> upgrade`.
-   - Group tests by risk area: `describe('<package> - <feature area>', () => { ... })`.
+   - Mock only what's necessary (network, filesystem, timers). In an upgrade workflow, **do not mock the package being upgraded** — that's the whole point of the test.
+   - Include a descriptive header comment:
+     - Upgrade: `// Regression tests for: <package>@<current-version> upgrade`.
+     - Standalone: `// Runtime validation coverage for: <behavior>`.
+   - Group tests by risk area or validated behavior.
 3. **Add a `test` script** to `package.json`: `"test": "vitest run"` (or the equivalent for the chosen framework).
-4. **Run the tests once** to confirm they are green against the current code. Fix any failures before continuing — the assertion will fail on baseline otherwise, and the comparison becomes meaningless.
+4. **Run the tests once** to confirm they are green against the current code. Fix test defects before continuing. If the test exposes a genuine application failure, return that failure to the calling workflow rather than weakening the test.
 
 ### Examples
 
